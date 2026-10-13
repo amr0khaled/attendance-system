@@ -49,7 +49,10 @@ jobs:
 
       # ---- Assets & Tests ----------------------------------------------------
       - name: Bundle student/admin pages from static/
-        run: flutter_app/tool/sync_static.sh
+        run: |
+          echo "=== Running sync_static.sh ==="
+          flutter_app/tool/sync_static.sh
+          ls -la flutter_app/assets/web/
 
       - name: Test
         working-directory: flutter_app
@@ -64,8 +67,6 @@ jobs:
           PYTHON=python DART=dart tests/parity.sh
 
       # ---- cloudflared for Linux ---------------------------------------------
-      # Downloaded via GH_TOKEN to avoid GitHub API rate limits. Pre-populates
-      # CMake's build dir so CMake skips downloading and installs it directly.
       - name: Resolve latest cloudflared release
         id: cf
         env:
@@ -73,20 +74,40 @@ jobs:
         run: |
           tag=$(gh release view -R cloudflare/cloudflared --json tagName -q .tagName)
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "cloudflared $tag"
+          echo "cloudflared release tag: $tag"
           mkdir -p flutter_app/build/linux/x64/release
           gh release download "$tag" -R cloudflare/cloudflared \
             -p "cloudflared-linux-amd64" \
             -O flutter_app/build/linux/x64/release/cloudflared
           chmod +x flutter_app/build/linux/x64/release/cloudflared
+          ls -la flutter_app/build/linux/x64/release/cloudflared
 
-      # ---- Build & Package ---------------------------------------------------
-      - name: Build Linux app
+      # ---- Build & Diagnostic Logging ----------------------------------------
+      - name: Build Linux app (verbose)
         working-directory: flutter_app
         run: |
-          flutter build linux --release
-          tar -czf "$GITHUB_WORKSPACE/attendance-host-linux-x64-${{ github.run_number }}.tar.gz" \
+          flutter build linux --release -v
+
+      - name: Debug inspect build bundle
+        working-directory: flutter_app
+        run: |
+          echo "=== Bundle files ==="
+          ls -la build/linux/x64/release/bundle/
+          echo "=== Bundle lib/ files ==="
+          ls -la build/linux/x64/release/bundle/lib/
+          echo "=== Verify libcloudflared.so ==="
+          file build/linux/x64/release/bundle/lib/libcloudflared.so
+          build/linux/x64/release/bundle/lib/libcloudflared.so --version
+          echo "=== Verify attendance_host binary ==="
+          file build/linux/x64/release/bundle/attendance_host
+
+      - name: Package release archive
+        working-directory: flutter_app
+        run: |
+          tar -czvf "$GITHUB_WORKSPACE/attendance-host-linux-x64-${{ github.run_number }}.tar.gz" \
             -C build/linux/x64/release/bundle .
+          echo "=== Archive info ==="
+          ls -lh "$GITHUB_WORKSPACE/attendance-host-linux-x64-${{ github.run_number }}.tar.gz"
 
       # ---- Publish -----------------------------------------------------------
       - name: Publish pre-release
