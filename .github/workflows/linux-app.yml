@@ -30,90 +30,105 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # ---- Dependencies ------------------------------------------------------
+      # ---- 1. Dependencies ---------------------------------------------------
       - name: Install Linux build dependencies
         run: |
-          sudo apt-get update -qq
+          set -x
+          echo "=== Step 1: Installing apt dependencies ==="
+          sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev zenity
 
-      - uses: subosito/flutter-action@v2
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
-      - uses: actions/setup-python@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
-      # ---- Assets & Tests ----------------------------------------------------
+      # ---- 2. Assets & Tests -------------------------------------------------
       - name: Bundle student/admin pages from static/
         run: |
-          echo "=== Running sync_static.sh ==="
+          set -x
+          echo "=== Step 2: Running sync_static.sh ==="
           flutter_app/tool/sync_static.sh
           ls -la flutter_app/assets/web/
 
-      - name: Test
+      - name: Flutter analyze & test
         working-directory: flutter_app
         run: |
+          set -x
+          echo "=== Step 3: Flutter pub get ==="
           flutter pub get
+          echo "=== Step 3: Flutter analyze ==="
           flutter analyze
+          echo "=== Step 3: Flutter test ==="
           flutter test
 
       - name: Parity tests (Python server vs Dart server)
         run: |
-          python -m pip install --quiet -r requirements.txt
+          set -x
+          echo "=== Step 4: Parity tests ==="
+          python -m pip install -r requirements.txt
           PYTHON=python DART=dart tests/parity.sh
 
-      # ---- cloudflared for Linux ---------------------------------------------
+      # ---- 3. cloudflared for Linux ------------------------------------------
       - name: Resolve latest cloudflared release
         id: cf
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -x
+          echo "=== Step 5: Resolving cloudflared ==="
           tag=$(gh release view -R cloudflare/cloudflared --json tagName -q .tagName)
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "cloudflared release tag: $tag"
           mkdir -p flutter_app/build/linux/x64/release
-          gh release download "$tag" -R cloudflare/cloudflared \
-            -p "cloudflared-linux-amd64" \
-            -O flutter_app/build/linux/x64/release/cloudflared
+          curl -fsSL "https://github.com/cloudflare/cloudflared/releases/download/$tag/cloudflared-linux-amd64" \
+            -o flutter_app/build/linux/x64/release/cloudflared
           chmod +x flutter_app/build/linux/x64/release/cloudflared
           ls -la flutter_app/build/linux/x64/release/cloudflared
 
-      # ---- Build & Diagnostic Logging ----------------------------------------
+      # ---- 4. Build & Package ------------------------------------------------
       - name: Build Linux app (verbose)
         working-directory: flutter_app
         run: |
+          set -x
+          echo "=== Step 6: Building Linux app ==="
           flutter build linux --release -v
 
       - name: Debug inspect build bundle
         working-directory: flutter_app
         run: |
-          echo "=== Bundle files ==="
+          set -x
+          echo "=== Step 7: Inspect bundle ==="
           ls -la build/linux/x64/release/bundle/
-          echo "=== Bundle lib/ files ==="
           ls -la build/linux/x64/release/bundle/lib/
-          echo "=== Verify libcloudflared.so ==="
           file build/linux/x64/release/bundle/lib/libcloudflared.so
           build/linux/x64/release/bundle/lib/libcloudflared.so --version
-          echo "=== Verify attendance_host binary ==="
           file build/linux/x64/release/bundle/attendance_host
 
       - name: Package release archive
         working-directory: flutter_app
         run: |
+          set -x
+          echo "=== Step 8: Packaging archive ==="
           tar -czvf "$GITHUB_WORKSPACE/attendance-host-linux-x64-${{ github.run_number }}.tar.gz" \
             -C build/linux/x64/release/bundle .
-          echo "=== Archive info ==="
           ls -lh "$GITHUB_WORKSPACE/attendance-host-linux-x64-${{ github.run_number }}.tar.gz"
 
-      # ---- Publish -----------------------------------------------------------
+      # ---- 5. Publish --------------------------------------------------------
       - name: Publish pre-release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -x
+          echo "=== Step 9: Creating release ==="
           tag="linux-build-${{ github.run_number }}"
           short=$(git rev-parse --short HEAD)
           gh release create "$tag" "attendance-host-linux-x64-${{ github.run_number }}.tar.gz" \
@@ -125,6 +140,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -x
+          echo "=== Step 10: Pruning old releases ==="
           gh release list --limit 100 --json tagName,createdAt \
             -q '[.[] | select(.tagName | startswith("linux-build-"))] | sort_by(.createdAt) | reverse | .[].tagName' \
             | tail -n +$((KEEP_RELEASES + 1)) \
