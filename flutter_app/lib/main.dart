@@ -18,7 +18,7 @@ import 'tunnels.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  netProbeLog = (m) => log('dns', m);   // visible in Debug -> Copy all
+  netProbeLog = (m) => log('dns', m); // visible in Debug -> Copy all
   runApp(const HostApp());
 }
 
@@ -29,7 +29,10 @@ class HostApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Attendance Host',
-      theme: ThemeData(colorSchemeSeed: const Color(0xFF3A8DDE), brightness: Brightness.dark),
+      theme: ThemeData(
+        colorSchemeSeed: const Color(0xFF3A8DDE),
+        brightness: Brightness.dark,
+      ),
       home: const HomePage(),
     );
   }
@@ -74,7 +77,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   void _toast(String msg) {
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    if (mounted)
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -99,16 +103,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     c.start(settings, resume: resume);
   }
 
-  Future<bool> _confirm(String title, String body, String action, {bool danger = true}) async {
+  Future<bool> _confirm(
+    String title,
+    String body,
+    String action, {
+    bool danger = true,
+  }) async {
     final yes = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title),
         content: Text(body),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-            style: danger ? FilledButton.styleFrom(backgroundColor: Colors.red.shade700) : null,
+            style: danger
+                ? FilledButton.styleFrom(backgroundColor: Colors.red.shade700)
+                : null,
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(action),
           ),
@@ -119,10 +133,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _confirmEnd() async {
-    if (await _confirm('End the session?',
-        '• Students can no longer submit\n'
-        '• The CSVs are saved to Download/Attendance\n'
-        '• The tunnels stop (the student links stop working)', 'End session')) {
+    if (await _confirm(
+      'End the session?',
+      '• Students can no longer submit\n'
+          '• The CSVs are saved to Download/Attendance\n'
+          '• The tunnels stop (the student links stop working)',
+      'End session',
+    )) {
       await c.endSession();
     }
   }
@@ -130,15 +147,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final batteryOk = c.device['batteryOptimizationIgnored'] == true;
+    final isDesktop =
+        Platform.isLinux || Platform.isWindows || Platform.isMacOS;
     final header = <Widget>[
-      if (!batteryOk)
+      if (!batteryOk && !isDesktop)
         Card(
           color: Colors.orange.shade900,
           child: ListTile(
             leading: const Icon(Icons.battery_alert),
             title: const Text('Battery optimisation is ON'),
-            subtitle: const Text('Android may freeze the server with the screen off. '
-                'Tap to allow running in the background.'),
+            subtitle: const Text(
+              'Android may freeze the server with the screen off. '
+              'Tap to allow running in the background.',
+            ),
             onTap: HostPlatform.requestBatteryExemption,
           ),
         ),
@@ -147,18 +168,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final bottom = SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: c.running ? _runningActions() : FilledButton.icon(
-          icon: const Icon(Icons.play_arrow),
-          label: Text(c.busy ? 'Starting…' : 'Start session'),
-          onPressed: c.busy ? null : () => _start(),
-        ),
+        child: c.running
+            ? _runningActions()
+            : FilledButton.icon(
+                icon: const Icon(Icons.play_arrow),
+                label: Text(c.busy ? 'Starting…' : 'Start session'),
+                onPressed: c.busy ? null : () => _start(),
+              ),
       ),
     );
     final debug = IconButton(
       tooltip: 'Debug',
       icon: const Icon(Icons.bug_report),
-      onPressed: () => Navigator.push(context,
-          MaterialPageRoute(builder: (_) => DebugPage(controller: c))),
+      onPressed: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => DebugPage(controller: c)),
+      ),
     );
 
     if (!c.running) {
@@ -183,38 +208,53 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               tooltip: 'Session actions',
               onSelected: _sessionAction,
               itemBuilder: (_) => const [
-                PopupMenuItem(value: 'export', child: Text('Export & share CSVs now')),
-                PopupMenuItem(value: 'reset', child: Text('Reset for a new take')),
+                PopupMenuItem(
+                  value: 'export',
+                  child: Text('Export & share CSVs now'),
+                ),
+                PopupMenuItem(
+                  value: 'reset',
+                  child: Text('Reset for a new take'),
+                ),
                 PopupMenuItem(value: 'subject', child: Text('New subject…')),
               ],
             ),
             debug,
           ],
-          bottom: TabBar(tabs: [
-            const Tab(text: 'Overview'),
-            Tab(text: 'Students (${st['count']})'),
-            Tab(text: 'Log (${(st['merges'] as List).length})'),
-          ]),
+          bottom: TabBar(
+            tabs: [
+              const Tab(text: 'Overview'),
+              Tab(text: 'Students (${st['count']})'),
+              Tab(text: 'Log (${(st['merges'] as List).length})'),
+            ],
+          ),
         ),
         bottomNavigationBar: bottom,
-        body: Column(children: [
-          if (c.linksNeedSharing) _linksBanner(),
-          Expanded(
-            child: TabBarView(children: [
-              ListView(padding: const EdgeInsets.all(16), children: [...header, ..._overview(st)]),
-              _studentsTab(st),
-              _logTab(),
-            ]),
-          ),
-        ]),
+        body: Column(
+          children: [
+            if (c.linksNeedSharing) _linksBanner(),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [...header, ..._overview(st)],
+                  ),
+                  _studentsTab(st),
+                  _logTab(),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   List<(String, String)> _currentLinks() => [
-        for (final t in c.tunnels?.tunnels ?? const <Tunnel>[])
-          if (t.url != null) (t.url!, 'Tunnel ${t.index}'),
-      ];
+    for (final t in c.tunnels?.tunnels ?? const <Tunnel>[])
+      if (t.url != null) (t.url!, 'Tunnel ${t.index}'),
+  ];
 
   /// Red banner while students may be holding a dead QR code.
   Widget _linksBanner() {
@@ -225,31 +265,41 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final msg = c.resumedLinksPending
         ? 'Session resumed with NEW student links. The old QR codes no longer work.'
         : '${changed.join(', ')} restarted with a NEW link. Students with the old QR '
-            "can't submit.";
+              "can't submit.";
     return Material(
       color: Colors.red.shade800,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Icon(Icons.warning_amber, color: Colors.white),
-            const SizedBox(width: 8),
-            Expanded(child: Text(msg, style: const TextStyle(color: Colors.white))),
-          ]),
-          Wrap(spacing: 4, children: [
-            TextButton.icon(
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
-              icon: const Icon(Icons.share),
-              label: const Text('Share new QR'),
-              onPressed: () => shareQrs(_currentLinks()),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.warning_amber, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(msg, style: const TextStyle(color: Colors.white)),
+                ),
+              ],
             ),
-            TextButton(
-              style: TextButton.styleFrom(foregroundColor: Colors.white70),
-              onPressed: c.acknowledgeLinks,
-              child: const Text("Done, I've shared it"),
+            Wrap(
+              spacing: 4,
+              children: [
+                TextButton.icon(
+                  style: TextButton.styleFrom(foregroundColor: Colors.white),
+                  icon: const Icon(Icons.share),
+                  label: const Text('Share new QR'),
+                  onPressed: () => shareQrs(_currentLinks()),
+                ),
+                TextButton(
+                  style: TextButton.styleFrom(foregroundColor: Colors.white70),
+                  onPressed: c.acknowledgeLinks,
+                  child: const Text("Done, I've shared it"),
+                ),
+              ],
             ),
-          ]),
-        ]),
+          ],
+        ),
       ),
     );
   }
@@ -259,13 +309,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       case 'export':
         final files = c.exportNow();
         if (files.isEmpty) return;
-        await SharePlus.instance.share(ShareParams(
-            files: [for (final p in files) XFile(p, mimeType: 'text/csv')]));
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [for (final p in files) XFile(p, mimeType: 'text/csv')],
+          ),
+        );
       case 'reset':
-        if (await _confirm('Reset for a new take?',
-            'Clears device locks so every student can submit again. Records are kept; '
-            'a student who re-submits with the same ID and name updates their entry.',
-            'Reset', danger: false)) {
+        if (await _confirm(
+          'Reset for a new take?',
+          'Clears device locks so every student can submit again. Records are kept; '
+              'a student who re-submits with the same ID and name updates their entry.',
+          'Reset',
+          danger: false,
+        )) {
           c.resetDevices();
           _toast('Device locks reset');
         }
@@ -275,15 +331,31 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('New subject'),
-            content: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Text('The current subject is saved to Download/Attendance and cleared. '
-                  'The student links stay the same.'),
-              TextField(controller: name, autofocus: true,
-                  decoration: const InputDecoration(labelText: 'New subject name')),
-            ]),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'The current subject is saved to Download/Attendance and cleared. '
+                  'The student links stay the same.',
+                ),
+                TextField(
+                  controller: name,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'New subject name',
+                  ),
+                ),
+              ],
+            ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Start')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Start'),
+              ),
             ],
           ),
         );
@@ -295,30 +367,32 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Widget _runningActions() {
-    final withUrl = c.tunnels?.tunnels.where((t) => t.url != null).toList() ?? const <Tunnel>[];
-    final links = [
-      for (final t in withUrl) (t.url!, 'Tunnel ${t.index}'),
-    ];
-    return Row(children: [
-      if (links.isNotEmpty) ...[
+    final withUrl =
+        c.tunnels?.tunnels.where((t) => t.url != null).toList() ??
+        const <Tunnel>[];
+    final links = [for (final t in withUrl) (t.url!, 'Tunnel ${t.index}')];
+    return Row(
+      children: [
+        if (links.isNotEmpty) ...[
+          Expanded(
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.share),
+              label: Text(links.length > 1 ? 'Share all QR' : 'Share QR'),
+              onPressed: () => shareQrs(links),
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
         Expanded(
-          child: OutlinedButton.icon(
-            icon: const Icon(Icons.share),
-            label: Text(links.length > 1 ? 'Share all QR' : 'Share QR'),
-            onPressed: () => shareQrs(links),
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            icon: const Icon(Icons.stop),
+            label: const Text('End session'),
+            onPressed: _confirmEnd,
           ),
         ),
-        const SizedBox(width: 12),
       ],
-      Expanded(
-        child: FilledButton.icon(
-          style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
-          icon: const Icon(Icons.stop),
-          label: const Text('End session'),
-          onPressed: _confirmEnd,
-        ),
-      ),
-    ]);
+    );
   }
 
   // ---------------------------------------------------------------- setup --
@@ -331,66 +405,101 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           color: Colors.blueGrey.shade800,
           child: Padding(
             padding: const EdgeInsets.all(12),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Unfinished session found',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 4),
-              Text('"${u.course}" · ${u.students} students · started '
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Unfinished session found',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '"${u.course}" · ${u.students} students · started '
                   '${u.startedAt.toString().substring(0, 16)}\n'
-                  'The app was closed before this session ended.'),
-              const SizedBox(height: 8),
-              Wrap(spacing: 8, children: [
-                FilledButton(
-                  onPressed: c.busy ? null : () => _start(resume: u),
-                  child: const Text('Resume it'),
+                  'The app was closed before this session ended.',
                 ),
-                OutlinedButton(
-                  onPressed: () => c.closeUnfinished(u),
-                  child: const Text('End it & save CSVs'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    FilledButton(
+                      onPressed: c.busy ? null : () => _start(resume: u),
+                      child: const Text('Resume it'),
+                    ),
+                    OutlinedButton(
+                      onPressed: () => c.closeUnfinished(u),
+                      child: const Text('End it & save CSVs'),
+                    ),
+                  ],
                 ),
-              ]),
-              const Text('Resume uses the settings below (location, password, tunnels).',
-                  style: TextStyle(color: Colors.white60, fontSize: 12)),
-            ]),
+                const Text(
+                  'Resume uses the settings below (location, password, tunnels).',
+                  style: TextStyle(color: Colors.white60, fontSize: 12),
+                ),
+              ],
+            ),
           ),
         ),
       Card(
         child: Padding(
           padding: const EdgeInsets.all(12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Before class', style: TextStyle(fontWeight: FontWeight.bold)),
-            const Text('Rehearse a session on the network you will use, and make sure '
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Before class',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const Text(
+                'Rehearse a session on the network you will use, and make sure '
                 'this phone keeps the app running with the screen off.',
-                style: TextStyle(fontSize: 13, color: Colors.white70)),
-            const SizedBox(height: 6),
-            Wrap(spacing: 8, children: [
-              FilledButton.tonalIcon(
-                icon: const Icon(Icons.fact_check),
-                label: const Text('Pre-class check'),
-                onPressed: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => PreflightPage(controller: c))),
+                style: TextStyle(fontSize: 13, color: Colors.white70),
               ),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.battery_saver),
-                label: const Text('Background settings'),
-                onPressed: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => const BackgroundGuidePage())),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                children: [
+                  FilledButton.tonalIcon(
+                    icon: const Icon(Icons.fact_check),
+                    label: const Text('Pre-class check'),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PreflightPage(controller: c),
+                      ),
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.battery_saver),
+                    label: const Text('Background settings'),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const BackgroundGuidePage(),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ]),
-          ]),
+            ],
+          ),
         ),
       ),
       const SizedBox(height: 8),
       TextField(
         controller: _course,
-        decoration: const InputDecoration(labelText: 'Course / subject name',
-            hintText: 'e.g. Anatomy Lecture 5'),
+        decoration: const InputDecoration(
+          labelText: 'Course / subject name',
+          hintText: 'e.g. Anatomy Lecture 5',
+        ),
       ),
       const SizedBox(height: 8),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Require location (GPS audit)'),
-        subtitle: const Text('Students must allow location; far-away ones are flagged.'),
+        subtitle: const Text(
+          'Students must allow location; far-away ones are flagged.',
+        ),
         value: settings.geofence,
         onChanged: (v) => setState(() => settings.geofence = v),
       ),
@@ -398,37 +507,51 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         TextField(
           controller: _radius,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Audit radius (km)',
-              helperText: 'Flag anyone farther than this from where most students are'),
+          decoration: const InputDecoration(
+            labelText: 'Audit radius (km)',
+            helperText:
+                'Flag anyone farther than this from where most students are',
+          ),
         ),
       const SizedBox(height: 8),
       Card(
         child: ListTile(
           leading: const Icon(Icons.list_alt),
-          title: Text(c.rosterIds.isEmpty
-              ? 'No class list: any numeric ID is accepted'
-              : 'Class list: ${c.rosterIds.length} IDs'),
-          subtitle: Text(c.rosterName == null
-              ? 'Import a CSV/TXT with student IDs in the first column'
-              : 'From "${c.rosterName}"'),
-          trailing: Wrap(children: [
-            if (c.rosterIds.isNotEmpty)
-              IconButton(tooltip: 'Remove class list', icon: const Icon(Icons.close),
-                  onPressed: c.clearRoster),
-            IconButton(
-              tooltip: 'Import class list',
-              icon: const Icon(Icons.file_open),
-              onPressed: () async => _toast(await c.importRoster()),
-            ),
-          ]),
+          title: Text(
+            c.rosterIds.isEmpty
+                ? 'No class list: any numeric ID is accepted'
+                : 'Class list: ${c.rosterIds.length} IDs',
+          ),
+          subtitle: Text(
+            c.rosterName == null
+                ? 'Import a CSV/TXT with student IDs in the first column'
+                : 'From "${c.rosterName}"',
+          ),
+          trailing: Wrap(
+            children: [
+              if (c.rosterIds.isNotEmpty)
+                IconButton(
+                  tooltip: 'Remove class list',
+                  icon: const Icon(Icons.close),
+                  onPressed: c.clearRoster,
+                ),
+              IconButton(
+                tooltip: 'Import class list',
+                icon: const Icon(Icons.file_open),
+                onPressed: () async => _toast(await c.importRoster()),
+              ),
+            ],
+          ),
         ),
       ),
       const SizedBox(height: 8),
       TextField(
         controller: _password,
         obscureText: true,
-        decoration: const InputDecoration(labelText: 'Web dashboard password (optional)',
-            helperText: 'Only for opening the dashboard in a browser; this app needs none'),
+        decoration: const InputDecoration(
+          labelText: 'Web dashboard password (optional)',
+          helperText: 'Only for opening the dashboard in a browser; this app needs none',
+        ),
       ),
       const SizedBox(height: 16),
       const Text('Tunnels (each handles ~200 students at once)'),
@@ -442,9 +565,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         onSelectionChanged: (s) => setState(() => settings.tunnels = s.first),
       ),
       const SizedBox(height: 12),
-      const Text('Closing or swiping the app away keeps the session running. '
-          'Only "End session" ends it.',
-          style: TextStyle(color: Colors.white70, fontSize: 13)),
+      const Text(
+        'Closing or swiping the app away keeps the session running. '
+        'Only "End session" ends it.',
+        style: TextStyle(color: Colors.white70, fontSize: 13),
+      ),
     ];
   }
 
@@ -453,25 +578,37 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       color: r.error != null ? Colors.red.shade900 : Colors.green.shade900,
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(r.error != null ? 'End session failed' : 'Session ended',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 4),
-          if (r.error != null) Text(r.error!),
-          if (r.saved.isNotEmpty) Text('Saved to Downloads:\n${r.saved.join('\n')}'),
-          if (r.error == null && r.saved.isEmpty)
-            const Text('Could not save to Downloads; use Share below.'),
-          if (r.exportPaths.isNotEmpty)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                icon: const Icon(Icons.share),
-                label: const Text('Share CSVs'),
-                onPressed: () => SharePlus.instance.share(ShareParams(
-                    files: [for (final p in r.exportPaths) XFile(p, mimeType: 'text/csv')])),
-              ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              r.error != null ? 'End session failed' : 'Session ended',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
-        ]),
+            const SizedBox(height: 4),
+            if (r.error != null) Text(r.error!),
+            if (r.saved.isNotEmpty)
+              Text('Saved to Downloads:\n${r.saved.join('\n')}'),
+            if (r.error == null && r.saved.isEmpty)
+              const Text('Could not save to Downloads; use Share below.'),
+            if (r.exportPaths.isNotEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  icon: const Icon(Icons.share),
+                  label: const Text('Share CSVs'),
+                  onPressed: () => SharePlus.instance.share(
+                    ShareParams(
+                      files: [
+                        for (final p in r.exportPaths)
+                          XFile(p, mimeType: 'text/csv'),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -484,18 +621,28 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final geo = st['geofence'] == true;
     final roster = c.server!.config.roster.length;
     return [
-      Text('Up ${up.inHours}:${two(up.inMinutes % 60)}:${two(up.inSeconds % 60)}'
-          '${roster > 0 ? ' · class list $roster IDs' : ''}',
-          style: const TextStyle(color: Colors.white70)),
+      Text(
+        'Up ${up.inHours}:${two(up.inMinutes % 60)}:${two(up.inSeconds % 60)}'
+        '${roster > 0 ? ' · class list $roster IDs' : ''}',
+        style: const TextStyle(color: Colors.white70),
+      ),
       const SizedBox(height: 8),
-      Wrap(spacing: 8, runSpacing: 8, children: [
-        _stat('Students', '${st['count']}'),
-        _stat('Submissions', '${st['submissions']}'),
-        _stat('Edits / conflicts', '${(st['merges'] as List).length}'),
-        if (geo) _stat('Out of bounds', '${st['out_of_bounds']}',
-            alert: (st['out_of_bounds'] as int) > 0),
-        _stat('On a shared IP', '${st['shared_ip']}'),
-      ]),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _stat('Students', '${st['count']}'),
+          _stat('Submissions', '${st['submissions']}'),
+          _stat('Edits / conflicts', '${(st['merges'] as List).length}'),
+          if (geo)
+            _stat(
+              'Out of bounds',
+              '${st['out_of_bounds']}',
+              alert: (st['out_of_bounds'] as int) > 0,
+            ),
+          _stat('On a shared IP', '${st['shared_ip']}'),
+        ],
+      ),
       const SizedBox(height: 8),
       for (final t in c.tunnels?.tunnels ?? const <Tunnel>[]) _tunnelCard(t),
     ];
@@ -507,55 +654,77 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final geo = st['geofence'] == true;
     final q = normalizeDigits(_search.text.trim());
     final all = c.server!.allStudents();
-    final rows = q.isEmpty ? all : all.where((x) =>
-        '${x['id']}'.contains(q) || nameKey('${x['name']}').contains(nameKey(q))).toList();
-    return Column(children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-        child: TextField(
-          controller: _search,
-          onChanged: (_) => _redraw(),
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.search),
-            hintText: 'Search name or ID (${all.length})',
-            suffixIcon: _search.text.isEmpty ? null : IconButton(
-                icon: const Icon(Icons.clear),
-                onPressed: () => setState(_search.clear)),
+    final rows = q.isEmpty
+        ? all
+        : all
+              .where(
+                (x) =>
+                    '${x['id']}'.contains(q) ||
+                    nameKey('${x['name']}').contains(nameKey(q)),
+              )
+              .toList();
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: TextField(
+            controller: _search,
+            onChanged: (_) => _redraw(),
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search),
+              hintText: 'Search name or ID (${all.length})',
+              suffixIcon: _search.text.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () => setState(_search.clear),
+                    ),
+            ),
           ),
         ),
-      ),
-      Expanded(
-        child: rows.isEmpty
-            ? const Center(child: Text('No students yet.'))
-            : ListView.separated(
-                itemCount: rows.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (_, i) {
-                  final x = rows[i];
-                  final out = x['out'] == true;
-                  return ListTile(
-                    dense: true,
-                    title: Text('${x['name']}', textDirection: TextDirection.rtl),
-                    subtitle: Text('${x['id']} · ${'${x['timestamp']}'.substring(11)}'
+        Expanded(
+          child: rows.isEmpty
+              ? const Center(child: Text('No students yet.'))
+              : ListView.separated(
+                  itemCount: rows.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final x = rows[i];
+                    final out = x['out'] == true;
+                    return ListTile(
+                      dense: true,
+                      title: Text(
+                        '${x['name']}',
+                        textDirection: TextDirection.rtl,
+                      ),
+                      subtitle: Text(
+                        '${x['id']} · ${'${x['timestamp']}'.substring(11)}'
                         '${x['edited'] == true ? ' · edited' : ''}'
                         '${x['shared_ip'] == true ? ' · shared IP' : ''}'
-                        '${geo && x['gps'] != true ? ' · no GPS' : ''}'),
-                    trailing: geo
-                        ? Text(_dist(x['dist_m'] as int?) + (out ? ' ⚠' : ''),
-                            style: TextStyle(color: out ? Colors.redAccent : null))
-                        : null,
-                  );
-                },
-              ),
-      ),
-    ]);
+                        '${geo && x['gps'] != true ? ' · no GPS' : ''}',
+                      ),
+                      trailing: geo
+                          ? Text(
+                              _dist(x['dist_m'] as int?) + (out ? ' ⚠' : ''),
+                              style: TextStyle(
+                                color: out ? Colors.redAccent : null,
+                              ),
+                            )
+                          : null,
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
   }
 
   // ------------------------------------------------------------------ log --
 
   Widget _logTab() {
     final events = c.server!.store.events.reversed.toList();
-    if (events.isEmpty) return const Center(child: Text('No edits or conflicts yet.'));
+    if (events.isEmpty)
+      return const Center(child: Text('No edits or conflicts yet.'));
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: events.length,
@@ -571,11 +740,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         return ListTile(
           dense: true,
           leading: Icon(Icons.circle, size: 12, color: color),
-          title: Text(kind, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-          subtitle: Text('Was: ${e['old_id']} · ${e['old_name']}\n'
-              'Now: ${e['new_id']} · ${e['new_name']}\n'
-              '${'${e['time']}'.replaceFirst('T', ' ')} · ${e['ip']}'
-              '${e['dist_m'] == null ? '' : ' · moved ${_dist(e['dist_m'] as int?)}'}'),
+          title: Text(
+            kind,
+            style: TextStyle(color: color, fontWeight: FontWeight.bold),
+          ),
+          subtitle: Text(
+            'Was: ${e['old_id']} · ${e['old_name']}\n'
+            'Now: ${e['new_id']} · ${e['new_name']}\n'
+            '${'${e['time']}'.replaceFirst('T', ' ')} · ${e['ip']}'
+            '${e['dist_m'] == null ? '' : ' · moved ${_dist(e['dist_m'] as int?)}'}',
+          ),
           isThreeLine: true,
         );
       },
@@ -584,40 +758,60 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   // -------------------------------------------------------------- helpers --
 
-  String _dist(int? m) => m == null ? '—' : (m >= 1000 ? '${(m / 1000).toStringAsFixed(2)} km' : '$m m');
+  String _dist(int? m) => m == null
+      ? '—'
+      : (m >= 1000 ? '${(m / 1000).toStringAsFixed(2)} km' : '$m m');
 
   Widget _stat(String label, String value, {bool alert = false}) => SizedBox(
-        width: 104,
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold,
-                  color: alert ? Colors.redAccent : null)),
-              Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70)),
-            ]),
+    width: 104,
+    child: Card(
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: alert ? Colors.redAccent : null,
+              ),
+            ),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 11, color: Colors.white70),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _linkButtons(String url, String title) => Wrap(
+    children: [
+      TextButton.icon(
+        icon: const Icon(Icons.copy, size: 18),
+        label: const Text('Copy'),
+        onPressed: () => Clipboard.setData(ClipboardData(text: url)),
+      ),
+      TextButton.icon(
+        icon: const Icon(Icons.share, size: 18),
+        label: const Text('Share QR'),
+        onPressed: () => shareQrs([(url, title)]),
+      ),
+      TextButton.icon(
+        icon: const Icon(Icons.qr_code, size: 18),
+        label: const Text('Show QR'),
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => QrPage(url: url, title: title),
           ),
         ),
-      );
-
-  Widget _linkButtons(String url, String title) => Wrap(children: [
-        TextButton.icon(
-          icon: const Icon(Icons.copy, size: 18),
-          label: const Text('Copy'),
-          onPressed: () => Clipboard.setData(ClipboardData(text: url)),
-        ),
-        TextButton.icon(
-          icon: const Icon(Icons.share, size: 18),
-          label: const Text('Share QR'),
-          onPressed: () => shareQrs([(url, title)]),
-        ),
-        TextButton.icon(
-          icon: const Icon(Icons.qr_code, size: 18),
-          label: const Text('Show QR'),
-          onPressed: () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => QrPage(url: url, title: title))),
-        ),
-      ]);
+      ),
+    ],
+  );
 
   Widget _tunnelCard(Tunnel t) {
     final color = switch (t.state) {
@@ -633,26 +827,44 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Icon(Icons.circle, size: 12, color: color),
-              const SizedBox(width: 8),
-              Text('Tunnel ${t.index}: ${t.state == TunnelState.up && !t.connected
-                  ? 'reconnecting (same link)' : t.state.name}',
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              const Spacer(),
-              Text('checks ${t.checksOk}✓ ${t.checksFailed}✗'),
-            ]),
+            Row(
+              children: [
+                Icon(Icons.circle, size: 12, color: color),
+                const SizedBox(width: 8),
+                Text(
+                  'Tunnel ${t.index}: ${t.state == TunnelState.up && !t.connected ? 'reconnecting (same link)' : t.state.name}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                Text('checks ${t.checksOk}✓ ${t.checksFailed}✗'),
+              ],
+            ),
             if (t.url != null) ...[
               const SizedBox(height: 6),
-              SelectableText(t.url!, style: const TextStyle(color: Colors.lightBlueAccent)),
+              SelectableText(
+                t.url!,
+                style: const TextStyle(color: Colors.lightBlueAccent),
+              ),
               _linkButtons(t.url!, 'Tunnel ${t.index}'),
             ],
-            if (t.linkChanged) const Text('NEW LINK: share this QR again',
-                style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-            if (t.restarts > 0) Text('restarted ${t.restarts}×',
-                style: const TextStyle(color: Colors.amber, fontSize: 12)),
+            if (t.linkChanged)
+              const Text(
+                'NEW LINK: share this QR again',
+                style: TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            if (t.restarts > 0)
+              Text(
+                'restarted ${t.restarts}×',
+                style: const TextStyle(color: Colors.amber, fontSize: 12),
+              ),
             if (t.lastError != null && t.state != TunnelState.up)
-              Text(t.lastError!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+              Text(
+                t.lastError!,
+                style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+              ),
           ],
         ),
       ),
@@ -671,10 +883,12 @@ Future<void> shareQrs(List<(String, String)> items) async {
       await f.writeAsBytes(bytes);
       files.add(XFile(f.path, mimeType: 'image/png'));
     }
-    await SharePlus.instance.share(ShareParams(
-      files: files,
-      text: items.map((e) => '${e.$2}: ${e.$1}').join('\n\n'),
-    ));
+    await SharePlus.instance.share(
+      ShareParams(
+        files: files,
+        text: items.map((e) => '${e.$2}: ${e.$1}').join('\n\n'),
+      ),
+    );
     log('qr', 'shared ${files.length} QR image(s)');
   } catch (e) {
     log('qr', 'share failed: $e');
@@ -693,9 +907,14 @@ class QrPage extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final bytes = await renderQrPng(url, title);
-      final stamp = DateTime.now().toIso8601String().substring(0, 19).replaceAll(':', '-');
+      final stamp = DateTime.now()
+          .toIso8601String()
+          .substring(0, 19)
+          .replaceAll(':', '-');
       final where = await HostPlatform.saveImage(
-          bytes, _qrFileName('$title $stamp'));
+        bytes,
+        _qrFileName('$title $stamp'),
+      );
       log('qr', 'saved $where');
       messenger.showSnackBar(SnackBar(content: Text('Saved to $where')));
     } catch (e) {
@@ -712,34 +931,46 @@ class QrPage extends StatelessWidget {
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: Row(children: [
-            Expanded(
-              child: FilledButton.icon(
-                icon: const Icon(Icons.download),
-                label: const Text('Save to Gallery'),
-                onPressed: () => _save(context),
+          child: Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.download),
+                  label: const Text('Save to Gallery'),
+                  onPressed: () => _save(context),
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton.icon(
-                icon: const Icon(Icons.share),
-                label: const Text('Share'),
-                onPressed: () => shareQrs([(url, title)]),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.share),
+                  label: const Text('Share'),
+                  onPressed: () => shareQrs([(url, title)]),
+                ),
               ),
-            ),
-          ]),
+            ],
+          ),
         ),
       ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              QrImageView(data: url, backgroundColor: Colors.white, size: 320),
-              const SizedBox(height: 12),
-              SelectableText(url, style: const TextStyle(color: Colors.black, fontSize: 16)),
-            ]),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                QrImageView(
+                  data: url,
+                  backgroundColor: Colors.white,
+                  size: 320,
+                ),
+                const SizedBox(height: 12),
+                SelectableText(
+                  url,
+                  style: const TextStyle(color: Colors.black, fontSize: 16),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -796,8 +1027,10 @@ class _DebugPageState extends State<DebugPage> {
     b.writeln('cloudflared version: $binaryVersion');
     b.writeln('full log file: ${DebugLog.instance.filePath ?? '(none yet)'}');
     for (final t in c.tunnels?.tunnels ?? const <Tunnel>[]) {
-      b.writeln('tunnel ${t.index}: ${t.state.name} url=${t.url} restarts=${t.restarts} '
-          'checks ok=${t.checksOk} failed=${t.checksFailed} lastError=${t.lastError}');
+      b.writeln(
+        'tunnel ${t.index}: ${t.state.name} url=${t.url} restarts=${t.restarts} '
+        'checks ok=${t.checksOk} failed=${t.checksFailed} lastError=${t.lastError}',
+      );
     }
     b.writeln('--- log (${DebugLog.instance.lines.length} lines) ---');
     DebugLog.instance.lines.forEach(b.writeln);
@@ -810,45 +1043,75 @@ class _DebugPageState extends State<DebugPage> {
     final info = widget.controller.device;
     return Scaffold(
       appBar: AppBar(title: const Text('Debug')),
-      body: SafeArea(child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              for (final e in info.entries)
-                Text('${e.key}: ${e.value}', style: const TextStyle(fontSize: 12)),
-              Text('cloudflared version: $binaryVersion', style: const TextStyle(fontSize: 12)),
-              const SizedBox(height: 8),
-              Wrap(spacing: 8, children: [
-                FilledButton.icon(
-                  icon: const Icon(Icons.copy),
-                  label: const Text('Copy all'),
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: _report()));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Debug report copied')));
-                  },
-                ),
-                OutlinedButton(onPressed: _checkBinary, child: const Text('Test cloudflared')),
-                OutlinedButton(
-                    onPressed: DebugLog.instance.clear, child: const Text('Clear log')),
-              ]),
-            ]),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: ListView.builder(
-              reverse: true,   // newest at the bottom, auto-scrolled into view
-              itemCount: lines.length,
-              itemBuilder: (_, i) => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-                child: Text(lines[lines.length - 1 - i],
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final e in info.entries)
+                    Text(
+                      '${e.key}: ${e.value}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  Text(
+                    'cloudflared version: $binaryVersion',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      FilledButton.icon(
+                        icon: const Icon(Icons.copy),
+                        label: const Text('Copy all'),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: _report()));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Debug report copied'),
+                            ),
+                          );
+                        },
+                      ),
+                      OutlinedButton(
+                        onPressed: _checkBinary,
+                        child: const Text('Test cloudflared'),
+                      ),
+                      OutlinedButton(
+                        onPressed: DebugLog.instance.clear,
+                        child: const Text('Clear log'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
-      )),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.builder(
+                reverse: true, // newest at the bottom, auto-scrolled into view
+                itemCount: lines.length,
+                itemBuilder: (_, i) => Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 1,
+                  ),
+                  child: Text(
+                    lines[lines.length - 1 - i],
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
