@@ -1,0 +1,148 @@
+name: Linux App
+
+on:
+  push:
+    paths:
+      - 'flutter_app/**'
+      - 'static/**'
+      - 'app.py'
+      - 'state.py'
+      - 'requirements.txt'
+      - 'tests/**'
+      - '.github/workflows/linux-app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: linux-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.47.6'
+  KEEP_RELEASES: '5'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      # ---- 1. Dependencies ---------------------------------------------------
+      - name: Install Linux build dependencies
+        run: |
+          set -x
+          echo "=== Step 1: Installing apt dependencies ==="
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev zenity
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      # ---- 2. Assets & Tests -------------------------------------------------
+      - name: Bundle student/admin pages from static/
+        run: |
+          set -x
+          echo "=== Step 2: Running sync_static.sh ==="
+          flutter_app/tool/sync_static.sh
+          ls -la flutter_app/assets/web/
+
+      - name: Flutter analyze & test
+        working-directory: flutter_app
+        run: |
+          set -x
+          echo "=== Step 3: Flutter pub get ==="
+          flutter pub get
+          echo "=== Step 3: Flutter analyze ==="
+          flutter analyze
+          echo "=== Step 3: Flutter test ==="
+          flutter test
+
+      - name: Parity tests (Python server vs Dart server)
+        run: |
+          set -x
+          echo "=== Step 4: Parity tests ==="
+          python -m pip install -r requirements.txt
+          PYTHON=python DART=dart tests/parity.sh
+
+      # ---- 3. cloudflared for Linux ------------------------------------------
+      - name: Resolve latest cloudflared release
+        id: cf
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -x
+          echo "=== Step 5: Resolving cloudflared ==="
+          tag=$(gh release view -R cloudflare/cloudflared --json tagName -q .tagName)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "cloudflared release tag: $tag"
+          mkdir -p flutter_app/build/linux/x64/release
+          curl -fsSL "https://github.com/cloudflare/cloudflared/releases/download/$tag/cloudflared-linux-amd64" \
+            -o flutter_app/build/linux/x64/release/cloudflared
+          chmod +x flutter_app/build/linux/x64/release/cloudflared
+          ls -la flutter_app/build/linux/x64/release/cloudflared
+
+      # ---- 4. Build & Package ------------------------------------------------
+      - name: Build Linux app (verbose)
+        working-directory: flutter_app
+        run: |
+          set -x
+          echo "=== Step 6: Building Linux app ==="
+          flutter build linux --release -v
+
+      - name: Debug inspect build bundle
+        working-directory: flutter_app
+        run: |
+          set -x
+          echo "=== Step 7: Inspect bundle ==="
+          ls -la build/linux/x64/release/bundle/
+          ls -la build/linux/x64/release/bundle/lib/
+          file build/linux/x64/release/bundle/lib/libcloudflared.so
+          build/linux/x64/release/bundle/lib/libcloudflared.so --version
+          file build/linux/x64/release/bundle/attendance_host
+
+      - name: Package release archive
+        working-directory: flutter_app
+        run: |
+          set -x
+          echo "=== Step 8: Packaging archive ==="
+          tar -czvf "$GITHUB_WORKSPACE/attendance-host-linux-x64-${{ github.run_number }}.tar.gz" \
+            -C build/linux/x64/release/bundle .
+          ls -lh "$GITHUB_WORKSPACE/attendance-host-linux-x64-${{ github.run_number }}.tar.gz"
+
+      # ---- 5. Publish --------------------------------------------------------
+      - name: Publish pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -x
+          echo "=== Step 9: Creating release ==="
+          tag="linux-build-${{ github.run_number }}"
+          short=$(git rev-parse --short HEAD)
+          gh release create "$tag" "attendance-host-linux-x64-${{ github.run_number }}.tar.gz" \
+            --prerelease --target "$GITHUB_SHA" \
+            --title "Attendance Host Linux build ${{ github.run_number }}" \
+            --notes "Branch \`${GITHUB_REF_NAME}\` @ \`$short\`, cloudflared ${{ steps.cf.outputs.tag }}."
+
+      - name: Keep only latest ${{ env.KEEP_RELEASES }} builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -x
+          echo "=== Step 10: Pruning old releases ==="
+          gh release list --limit 100 --json tagName,createdAt \
+            -q '[.[] | select(.tagName | startswith("linux-build-"))] | sort_by(.createdAt) | reverse | .[].tagName' \
+            | tail -n +$((KEEP_RELEASES + 1)) \
+            | while read -r t; do gh release delete "$t" --yes --cleanup-tag; done
